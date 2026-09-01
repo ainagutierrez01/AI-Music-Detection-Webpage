@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Detector de música IA — TikTok</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#090b10;
+    --panel:#10131b;
+    --panel-border:#1d2230;
+    --ink:#e9edf5;
+    --muted:#7d8798;
+    --grid:#161a24;
+    --teal:#12d6b0;
+    --magenta:#d63dc8;
+    --amber:#f2b23b;
+    --real:#12d6b0;
+    --fake:#e0457a;
+    --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --sans:'Space Grotesk', system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    min-height:100vh;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:56px 20px 80px;}
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--teal);
+    display:flex;align-items:center;gap:10px;
+    margin-bottom:18px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:7px;height:7px;border-radius:50%;
+    background:var(--teal);
+    box-shadow:0 0 0 3px rgba(18,214,176,.15);
+  }
+
+  h1{
+    font-size:clamp(28px,4.5vw,42px);
+    line-height:1.08;
+    margin:0 0 14px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+  }
+  h1 em{
+    font-style:normal;
+    background:linear-gradient(90deg,var(--teal),var(--magenta));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  p.lede{
+    color:var(--muted);
+    font-size:15.5px;
+    line-height:1.6;
+    max-width:56ch;
+    margin:0 0 40px;
+  }
+  p.lede code{
+    font-family:var(--mono);
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    padding:1px 6px;
+    border-radius:4px;
+    font-size:13px;
+    color:var(--ink);
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:14px;
+    padding:28px;
+    margin-bottom:20px;
+  }
+  .panel h2{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0 0 18px;
+    font-weight:500;
+  }
+
+  select, .dropzone, button{
+    font-family:var(--sans);
+  }
+
+  select{
+    width:100%;
+    background:#0c0f16;
+    color:var(--ink);
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    padding:12px 14px;
+    font-size:14.5px;
+    appearance:none;
+    -webkit-appearance:none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 20px) center, calc(100% - 15px) center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  select:focus{outline:2px solid var(--teal); outline-offset:1px;}
+
+  .model-desc{
+    font-size:13px;
+    color:var(--muted);
+    margin-top:10px;
+    line-height:1.5;
+    font-family:var(--mono);
+  }
+
+  .dropzone{
+    margin-top:18px;
+    border:1.5px dashed var(--panel-border);
+    border-radius:10px;
+    padding:26px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--teal);
+    background:rgba(18,214,176,.04);
+  }
+  .dropzone input{display:none;}
+  .dropzone .dz-title{font-size:14.5px;margin-bottom:4px;}
+  .dropzone .dz-sub{font-size:12.5px;color:var(--muted);font-family:var(--mono);}
+  .dropzone .dz-file{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--teal);
+    margin-top:8px;
+    word-break:break-all;
+  }
+
+  button.run{
+    margin-top:18px;
+    width:100%;
+    background:var(--ink);
+    color:#0a0c11;
+    border:none;
+    border-radius:8px;
+    padding:14px;
+    font-size:14.5px;
+    font-weight:600;
+    letter-spacing:.01em;
+    cursor:pointer;
+    transition:transform .1s ease, opacity .15s ease;
+  }
+  button.run:hover{opacity:.9;}
+  button.run:active{transform:scale(.99);}
+  button.run:disabled{opacity:.4;cursor:not-allowed;}
+
+  .readout{
+    display:none;
+    border:1px solid var(--panel-border);
+    border-radius:14px;
+    overflow:hidden;
+    margin-top:20px;
+  }
+  .readout.show{display:block;}
+  .readout-head{
+    padding:20px 26px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:1px solid var(--panel-border);
+  }
+  .readout-head .verdict{
+    font-family:var(--mono);
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:.02em;
+  }
+  .readout-head .verdict.real{color:var(--real);}
+  .readout-head .verdict.fake{color:var(--fake);}
+  .readout-head .pct{font-family:var(--mono);color:var(--muted);font-size:13px;}
+
+  .meter{
+    height:34px;
+    background:#0c0f16;
+    position:relative;
+    margin:0 26px;
+    margin-top:20px;
+    border-radius:4px;
+    overflow:hidden;
+    border:1px solid var(--panel-border);
+  }
+  .meter .fill{
+    position:absolute;top:0;left:0;bottom:0;
+    width:0%;
+    background:linear-gradient(90deg, var(--real), var(--amber) 55%, var(--fake));
+    transition:width .6s cubic-bezier(.2,.8,.2,1);
+  }
+  .meter .marker{
+    position:absolute;top:-4px;bottom:-4px;
+    width:2px;background:var(--ink);
+    left:50%;
+    opacity:.5;
+  }
+  .meter-labels{
+    display:flex;justify-content:space-between;
+    margin:8px 26px 22px;
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:.05em;
+  }
+
+  .readout-foot{
+    padding:16px 26px 22px;
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--muted);
+    line-height:1.6;
+  }
+
+  .spectro{
+    display:none;
+    height:64px;
+    margin-top:18px;
+    border-radius:8px;
+    overflow:hidden;
+    border:1px solid var(--panel-border);
+  }
+  .spectro.show{display:block;}
+  .spectro canvas{display:block;width:100%;height:100%;}
+
+  .status-line{
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--muted);
+    margin-top:14px;
+    min-height:16px;
+  }
+  .status-line.err{color:var(--fake);}
+
+  footer{
+    margin-top:40px;
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--muted);
+    letter-spacing:.03em;
+    line-height:1.7;
+  }
+  footer a{color:var(--teal);text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Càpsula de recerca — TFG</div>
+  <h1>Aquesta cançó,<br><em>l'ha fet una persona o una IA?</em></h1>
+  <p class="lede">
+    Puja un fragment d’àudio i tria quin detector vols utilitzar. 
+    Tots els detectors comparteixen la mateixa arquitectura, però cadascun ha estat entrenat amb un dataset diferent. 
+    Això fa que cada detector aprengui patrons diferents i, 
+    per tant, pugui donar resultats diferents sobre un mateix àudio.
+  </p>
+
+  <div class="panel">
+    <h2>01 · Tria el detector</h2>
+    <select id="modelSelect"></select>
+    <div class="model-desc" id="modelDesc"></div>
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="audio/*,video/*">
+      <div class="dz-title">Arrossega un àudio o vídeo (p. ex. un TikTok) o fes clic per triar-lo</div>
+      <div class="dz-sub">MP3 · WAV · M4A · OGG &nbsp;·&nbsp; MP4 · MOV · WEBM — si és vídeo, se n'extreu l'àudio automàticament</div>
+      <div class="dz-file" id="fileName"></div>
+    </div>
+
+    <div class="spectro" id="spectro"><canvas id="spectroCanvas"></canvas></div>
+
+    <button class="run" id="runBtn" disabled>Analitza l'àudio</button>
+    <div class="status-line" id="status"></div>
+  </div>
+
+  <div class="readout" id="readout">
+    <div class="readout-head">
+      <div class="verdict" id="verdict">—</div>
+      <div class="pct" id="pct"></div>
+    </div>
+    <div class="meter"><div class="fill" id="meterFill"></div><div class="marker"></div></div>
+    <div class="meter-labels"><span>0% — probablement REAL</span><span>100% — probablement IA</span></div>
+    <div class="readout-foot" id="readoutFoot"></div>
+  </div>
+
+  <footer>
+    Projecte de recerca — "Benchmarking AI-Generated Music Detection Under TikTok Audio Processing
+    Conditions". Codi complet a <a href="https://github.com/ainagutierrez/AI-tiktok-detection" target="_blank">github.com/ainagutierrez/AI-tiktok-detection</a>.
+  </footer>
+</div>
+
+<script>
+const modelSelect = document.getElementById('modelSelect');
+const modelDesc = document.getElementById('modelDesc');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileName = document.getElementById('fileName');
+const runBtn = document.getElementById('runBtn');
+const statusEl = document.getElementById('status');
+const readout = document.getElementById('readout');
+const verdictEl = document.getElementById('verdict');
+const pctEl = document.getElementById('pct');
+const meterFill = document.getElementById('meterFill');
+const readoutFoot = document.getElementById('readoutFoot');
+const spectroWrap = document.getElementById('spectro');
+const spectroCanvas = document.getElementById('spectroCanvas');
+
+let selectedFile = null;
+let models = [];
+let spectroTimer = null;
+
+async function loadModels(){
+  const res = await fetch('/api/models');
+  models = await res.json();
+  modelSelect.innerHTML = models.map(m => `<option value="${m.key}">${m.label}</option>`).join('');
+  updateDesc();
+}
+function updateDesc(){
+  const m = models.find(m => m.key === modelSelect.value);
+  modelDesc.textContent = m ? m.description : '';
+}
+modelSelect.addEventListener('change', updateDesc);
+
+function setFile(f){
+  selectedFile = f;
+  fileName.textContent = f ? `Seleccionat: ${f.name}` : '';
+  runBtn.disabled = !f;
+}
+
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => setFile(e.target.files[0]));
+['dragover','dragenter'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e => { if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+
+function drawSpectroFrame(ctx, w, h){
+  const bars = 48;
+  const bw = w / bars;
+  for (let i=0;i<bars;i++){
+    const v = Math.random();
+    const hgt = v*h;
+    const hue = 165 + v*140; // teal -> magenta range
+    ctx.fillStyle = `hsl(${hue}, 75%, ${35+v*25}%)`;
+    ctx.fillRect(i*bw, h-hgt, bw*0.82, hgt);
+  }
+}
+function startSpectro(){
+  spectroWrap.classList.add('show');
+  const ctx = spectroCanvas.getContext('2d');
+  const resize = () => {
+    spectroCanvas.width = spectroCanvas.clientWidth * devicePixelRatio;
+    spectroCanvas.height = spectroCanvas.clientHeight * devicePixelRatio;
+  };
+  resize();
+  spectroTimer = setInterval(() => {
+    ctx.clearRect(0,0,spectroCanvas.width, spectroCanvas.height);
+    drawSpectroFrame(ctx, spectroCanvas.width, spectroCanvas.height);
+  }, 110);
+}
+function stopSpectro(){
+  clearInterval(spectroTimer);
+  spectroWrap.classList.remove('show');
+}
+
+runBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  readout.classList.remove('show');
+  statusEl.classList.remove('err');
+  const looksLikeVideo = /\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(selectedFile.name);
+  statusEl.textContent = looksLikeVideo
+    ? "Extraient l'àudio del vídeo i executant el model…"
+    : 'Processant àudio i executant el model…';
+  runBtn.disabled = true;
+  startSpectro();
+
+  const fd = new FormData();
+  fd.append('audio', selectedFile);
+  fd.append('model', modelSelect.value);
+
+  try{
+    const res = await fetch('/api/detect', { method:'POST', body: fd });
+    const data = await res.json();
+    if (!data.success){ throw new Error(data.error || 'Error desconegut'); }
+
+    const p = data.probability_fake;
+    const pct = Math.round(p*100);
+    verdictEl.textContent = data.label === 'FAKE' ? 'PROBABLEMENT IA' : 'PROBABLEMENT REAL';
+    verdictEl.className = 'verdict ' + (data.label === 'FAKE' ? 'fake' : 'real');
+    pctEl.textContent = `confiança IA: ${pct}%`;
+    meterFill.style.width = pct + '%';
+    readoutFoot.textContent = `Model: ${data.model_label}`;
+    readout.classList.add('show');
+    statusEl.textContent = '';
+  }catch(err){
+    statusEl.textContent = 'Error: ' + err.message;
+    statusEl.classList.add('err');
+  }finally{
+    stopSpectro();
+    runBtn.disabled = false;
+  }
+});
+
+loadModels();
+</script>
+</body>
+</html>
