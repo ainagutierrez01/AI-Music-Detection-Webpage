@@ -402,7 +402,16 @@ runBtn.addEventListener('click', async () => {
 
   try{
     const res = await fetch('/api/detect', { method:'POST', body: fd });
-    const data = await res.json();
+    let data;
+    try{
+      data = await res.json();
+    }catch(parseErr){
+      throw new Error(
+        res.status === 504 || res.status === 502
+          ? "El servidor ha trigat massa a respondre (pot passar la primera vegada, mentre es desperta el servei gratuït). Torna-ho a provar en uns segons."
+          : `El servidor ha respost amb un error inesperat (codi ${res.status}).`
+      );
+    }
     if (!data.success){ throw new Error(data.error || 'Error desconegut'); }
 
     const p = data.probability_fake;

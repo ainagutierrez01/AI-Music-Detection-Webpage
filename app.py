@@ -38,25 +38,30 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"}
 FFMPEG_BIN = imageio_ffmpeg.get_ffmpeg_exe()  # bundled static binary, no system install needed
 
 
-def extract_audio_from_video(video_path):
-    """Pull the audio track out of an uploaded video and save it as a WAV file."""
-    wav_path = video_path + "_audio.wav"
+def normalize_to_wav(input_path):
+    """Convert ANY input (audio or video, any codec) into a clean mono 16kHz WAV
+    using the bundled ffmpeg binary. This is the only audio decoding path in the
+    app — deliberately avoids librosa, whose numba JIT-compiles on first use and
+    can blow past the request timeout on a slow/free-tier host."""
+    wav_path = input_path + "_norm.wav"
     cmd = [
         FFMPEG_BIN, "-y",
-        "-i", video_path,
-        "-vn",                    # no video
-        "-ac", "1",                # mono
-        "-ar", str(SR),            # resample straight to the model's sample rate
+        "-i", input_path,
+        "-vn",
+        "-ac", "1",
+        "-ar", str(SR),
         "-f", "wav",
         wav_path,
     ]
     result = subprocess.run(cmd, capture_output=True, timeout=60)
     if result.returncode != 0 or not os.path.exists(wav_path):
         raise RuntimeError(
-            "No s'ha pogut extreure l'àudio del vídeo "
+            "No s'ha pogut llegir l'àudio del fitxer "
             f"(ffmpeg: {result.stderr.decode(errors='ignore')[-400:]})"
         )
     return wav_path
+
+extract_audio_from_video = normalize_to_wav
 
 # Every entry below is a REAL checkpoint trained for this thesis, reusing the
 # exact SimpleSpectrogramCNN architecture — only the training data differs.
@@ -108,29 +113,25 @@ def get_model(key):
 
 
 def load_audio(path):
-    """Load audio robustly: try librosa (handles mp3/m4a via audioread), then soundfile."""
-    try:
-        import librosa
-        waveform, sr = librosa.load(path, sr=None, mono=True)
-        return torch.from_numpy(waveform).float(), sr
-    except Exception as e_librosa:
-        try:
-            import soundfile as sf
-            waveform, sr = sf.read(path, dtype="float32")
-            if waveform.ndim == 2:
-                waveform = waveform.mean(axis=1)
-            return torch.from_numpy(waveform).float(), sr
-        except Exception as e_sf:
-            raise RuntimeError(f"Could not decode audio (librosa: {e_librosa}; soundfile: {e_sf})")
+    """Load audio via soundfile only — fast, no JIT compilation, no surprises."""
+    import soundfile as sf
+    waveform, sr = sf.read(path, dtype="float32")
+    if waveform.ndim == 2:
+        waveform = waveform.mean(axis=1)
+    return torch.from_numpy(waveform).float(), sr
 
 
 def predict(model, audio_path):
-    waveform, sr = load_audio(audio_path)
-
-    if sr != SR:
-        waveform = torch.from_numpy(
-            __import__("librosa").resample(waveform.numpy(), orig_sr=sr, target_sr=SR)
-        ).float()
+    # Always normalize first: guarantees mono + SR sample rate + a format
+    # soundfile can read, regardless of what the user actually uploaded.
+    normalized_path = normalize_to_wav(audio_path)
+    try:
+        waveform, sr = load_audio(normalized_path)
+    finally:
+        try:
+            os.unlink(normalized_path)
+        except OSError:
+            pass
 
     num_samples = SR * DURATION
     if waveform.shape[0] > num_samples:
@@ -180,16 +181,9 @@ def api_detect():
         upload_file.save(tmp.name)
         tmp_path = tmp.name
 
-    audio_path = tmp_path
-    extracted_path = None
     try:
-        if is_video:
-            logger.info("Uploaded file looks like video (%s) — extracting audio track", suffix)
-            extracted_path = extract_audio_from_video(tmp_path)
-            audio_path = extracted_path
-
         model = get_model(model_key)
-        label, prob_fake = predict(model, audio_path)
+        label, prob_fake = predict(model, tmp_path)  # predict() normalizes via ffmpeg internally
         return jsonify({
             "success": True,
             "model": model_key,
@@ -202,12 +196,10 @@ def api_detect():
         logger.exception("Detection failed")
         return jsonify({"success": False, "error": str(e)}), 500
     finally:
-        for p in (tmp_path, extracted_path):
-            if p:
-                try:
-                    os.unlink(p)
-                except OSError:
-                    pass
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
